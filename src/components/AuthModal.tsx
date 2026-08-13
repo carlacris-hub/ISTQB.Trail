@@ -161,7 +161,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onClose();
     } catch (err: any) {
       console.error('Google Auth Error:', err);
-      setErrorMsg(err?.message || (lang === 'en' ? 'Google Sign-In failed.' : 'Falha no Login com Google.'));
+      let msg = err?.message || (lang === 'en' ? 'Google Sign-In failed.' : 'Falha no Login com Google.');
+      if (err?.code === 'auth/unauthorized-domain') {
+        const currentHostname = typeof window !== 'undefined' ? window.location.hostname : 'seu domínio';
+        msg = lang === 'en' 
+          ? `The domain "${currentHostname}" is not yet added to Authorized Domains in Firebase Authentication. Please use Email/Password or Guest Mode below, or add this domain in Firebase Console > Authentication > Settings > Authorized Domains.` 
+          : `O domínio "${currentHostname}" precisa ser adicionado aos Domínios Autorizados no Firebase Authentication. Use E-mail/Senha ou Modo Convidado abaixo para continuar agora, ou adicione o domínio no Console do Firebase (Authentication > Settings > Authorized domains).`;
+      } else if (err?.code === 'auth/popup-closed-by-user') {
+        msg = lang === 'en' ? 'Login popup was closed before completing.' : 'A janela de login foi fechada antes de concluir.';
+      } else if (err?.code === 'auth/cancelled-popup-request') {
+        msg = lang === 'en' ? 'Only one popup request allowed at a time.' : 'Requisição de login cancelada.';
+      }
+      setErrorMsg(msg);
     } finally {
       setLoading(false);
     }
