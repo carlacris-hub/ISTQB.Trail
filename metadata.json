@@ -1,0 +1,6 @@
+{
+  "name": "ISTQB Trail",
+  "description": "App gamificado de estudos para a certificação ISTQB Foundation Level (CTFL v4.0), com trilha por capítulos, micro-lições, quizzes, sistema de vidas, simulado oficial cronometrado e ranking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

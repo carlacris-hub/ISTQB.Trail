@@ -1,0 +1,177 @@
+{
+  "entities": {
+    "users": {
+      "title": "User",
+      "description": "User profile and core game attributes",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "username": { "type": "string", "maxLength": 30, "pattern": "^[a-zA-Z0-9_.]+$" },
+        "email": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "company": { "type": "string", "maxLength": 100 },
+        "bio": { "type": "string", "maxLength": 280 },
+        "country": { "type": "string", "maxLength": 5 },
+        "language": { "type": "string", "enum": ["pt", "en"] },
+        "plan": { "type": "string", "enum": ["free", "pro"] },
+        "xpTotal": { "type": "number" },
+        "level": { "type": "number" },
+        "streakDays": { "type": "number" },
+        "coins": { "type": "number" },
+        "extraMockExamTokens": { "type": "number" },
+        "livesCurrent": { "type": "number" },
+        "livesMax": { "type": "number" },
+        "completedChapterIds": { "type": "array", "items": { "type": "string" } },
+        "completedLessonIds": { "type": "array", "items": { "type": "string" } },
+        "unlockedBadgeIds": { "type": "array", "items": { "type": "string" } },
+        "mockExamsUsedThisMonth": { "type": "number" },
+        "clanId": { "type": "string" },
+        "role": { "type": "string", "enum": ["student", "tester", "admin"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    },
+    "advances": {
+      "title": "Advance",
+      "description": "Granular user study advances and lesson completion",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "completedLessonIds": { "type": "array", "items": { "type": "string" } },
+        "completedChapterIds": { "type": "array", "items": { "type": "string" } },
+        "unlockedBadgeIds": { "type": "array", "items": { "type": "string" } },
+        "chapterQuizScores": { "type": "object" },
+        "lastActiveDate": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId"]
+    },
+    "mock_exams": {
+      "title": "MockExamResult",
+      "description": "Immutable official timed mock exam audit records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "date": { "type": "string" },
+        "score": { "type": "number" },
+        "totalQuestions": { "type": "number" },
+        "percentage": { "type": "number" },
+        "passed": { "type": "boolean" },
+        "timeSpentSeconds": { "type": "number" },
+        "categoryScores": { "type": "object" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "score", "totalQuestions", "passed"]
+    },
+    "clans": {
+      "title": "Clan",
+      "description": "QA Community study groups and team leaderboards",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 50 },
+        "tag": { "type": "string", "maxLength": 6 },
+        "description": { "type": "string", "maxLength": 300 },
+        "icon": { "type": "string" },
+        "leaderId": { "type": "string" },
+        "leaderName": { "type": "string" },
+        "members": { "type": "array" },
+        "memberCount": { "type": "number" },
+        "totalXp": { "type": "number" },
+        "isPublic": { "type": "boolean" },
+        "minLevel": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "tag", "leaderId"]
+    },
+    "challenges": {
+      "title": "Challenge",
+      "description": "1v1 QA testing battles between candidates",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "challengerId": { "type": "string" },
+        "challengerName": { "type": "string" },
+        "challengerAvatar": { "type": "string" },
+        "opponentId": { "type": "string" },
+        "opponentName": { "type": "string" },
+        "opponentAvatar": { "type": "string" },
+        "chapterId": { "type": "string" },
+        "chapterTitle": { "type": "string" },
+        "questions": { "type": "array" },
+        "challengerScore": { "type": "number" },
+        "opponentScore": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "active", "completed", "declined"] },
+        "winnerId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "challengerId", "opponentId", "status"]
+    },
+    "notifications": {
+      "title": "Notification",
+      "description": "Direct user notifications for streak, challenges, and clan invites",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "title", "message"]
+    },
+    "transactions": {
+      "title": "Transaction",
+      "description": "Anti-fraud verified transaction logs for coin and token movements",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "type": { "type": "string" },
+        "amount": { "type": "number" },
+        "source": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "type", "amount"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/users" },
+      "description": "Stores user profiles, XP, and secure account balance"
+    },
+    "/advances/{userId}": {
+      "schema": { "$ref": "#/entities/advances" },
+      "description": "Stores individual user syllabus progress and completed micro-lessons"
+    },
+    "/mock_exams/{examId}": {
+      "schema": { "$ref": "#/entities/mock_exams" },
+      "description": "Stores immutable audit results of official timed mock exams"
+    },
+    "/clans/{clanId}": {
+      "schema": { "$ref": "#/entities/clans" },
+      "description": "Stores study clan entities and real-time team leaderboards"
+    },
+    "/challenges/{challengeId}": {
+      "schema": { "$ref": "#/entities/challenges" },
+      "description": "Stores 1v1 live QA challenges between candidates"
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/notifications" },
+      "description": "Stores real-time alerts and challenge notices"
+    },
+    "/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/transactions" },
+      "description": "Stores audit records of economy operations"
+    }
+  }
+}

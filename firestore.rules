@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidUserPayload(data) {
+      return data.uid == request.auth.uid &&
+        (!('coins' in data) || (data.coins is number && data.coins >= 0)) &&
+        (!('livesCurrent' in data) || (data.livesCurrent is number && data.livesCurrent >= 0 && data.livesCurrent <= 10)) &&
+        (!('xpTotal' in data) || (data.xpTotal is number && data.xpTotal >= 0));
+    }
+
+    // 1. Users Collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidUserPayload(request.resource.data) &&
+        (!('role' in request.resource.data) || request.resource.data.role != 'admin');
+      allow update: if isOwner(userId) && isValidUserPayload(request.resource.data) &&
+        // Prevent privilege escalation to admin role
+        (!('role' in request.resource.data) || request.resource.data.role == resource.data.role);
+      allow delete: if isOwner(userId);
+    }
+
+    // 2. Advances / Progress Collection
+    match /advances/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+
+    // 3. Official Timed Mock Exams (Immutable audit log)
+    match /mock_exams/{examId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && 
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.score is number &&
+        request.resource.data.totalQuestions is number &&
+        request.resource.data.score >= 0 &&
+        request.resource.data.score <= request.resource.data.totalQuestions &&
+        request.resource.data.totalQuestions <= 40;
+      allow update, delete: if false; // Immutable exam history records
+    }
+
+    // 4. Clans / Study Groups
+    match /clans/{clanId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.leaderId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        resource.data.leaderId == request.auth.uid ||
+        // Allow members to join/leave safely
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'memberCount', 'totalXp', 'updatedAt'])
+      );
+      allow delete: if isAuthenticated() && resource.data.leaderId == request.auth.uid;
+    }
+
+    // 5. 1v1 Challenges
+    match /challenges/{challengeId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.challengerId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        resource.data.challengerId == request.auth.uid || 
+        resource.data.opponentId == request.auth.uid
+      );
+      allow delete: if isAuthenticated() && resource.data.challengerId == request.auth.uid;
+    }
+
+    // 6. Real-time Notifications
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // 7. Balance & Security Transactions
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // System connection test
+    match /system/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+  }
+}

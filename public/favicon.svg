@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="100%" height="100%">
+  <defs>
+    <linearGradient id="favRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2dd4bf" />
+      <stop offset="100%" stop-color="#0d9488" />
+    </linearGradient>
+    <linearGradient id="favLensGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+  </defs>
+
+  <!-- Card Background -->
+  <rect x="6" y="6" width="168" height="168" rx="36" fill="#0f172a" stroke="#334155" stroke-width="2.5" />
+
+  <!-- Progress Track Circle -->
+  <circle cx="90" cy="90" r="56" fill="none" stroke="#1e293b" stroke-width="12" />
+
+  <!-- Progress Active Ring Arc -->
+  <circle
+    cx="90"
+    cy="90"
+    r="56"
+    fill="none"
+    stroke="url(#favRingGrad)"
+    stroke-width="12"
+    stroke-linecap="round"
+    stroke-dasharray="250 352"
+    transform="rotate(-100 90 90)"
+  />
+
+  <!-- Magnifying Glass Lens -->
+  <circle
+    cx="82"
+    cy="82"
+    r="22"
+    fill="none"
+    stroke="url(#favLensGrad)"
+    stroke-width="7"
+  />
+
+  <!-- Magnifying Glass Handle -->
+  <line
+    x1="97"
+    y1="97"
+    x2="116"
+    y2="116"
+    stroke="url(#favLensGrad)"
+    stroke-width="7"
+    stroke-linecap="round"
+  />
+
+  <!-- Bug Dot inside Lens -->
+  <circle cx="76" cy="76" r="6" fill="#a855f7" />
+</svg>
