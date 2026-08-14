@@ -38,6 +38,10 @@ export const TRANSACTIONS_COLLECTION = 'transactions';
 // 1. USERS & ACCOUNT SECURITY
 // ==========================================
 
+// In-memory cache for all users to prevent excessive reads
+let cachedAllUsers: { timestamp: number; data: LeaderboardUser[] } | null = null;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 export async function saveUserProfileToFirestore(user: UserProfile): Promise<void> {
   const uid = user.uid || user.id;
   if (!uid || uid === 'usr_default') return;
@@ -72,16 +76,14 @@ export async function saveUserProfileToFirestore(user: UserProfile): Promise<voi
   };
 
   try {
-    const docSnap = await getDoc(userRef);
-    if (!docSnap.exists()) {
-      cleanData.createdAt = new Date().toISOString();
-      cleanData.role = 'student';
-      await setDoc(userRef, cleanData);
+    // Use setDoc with merge: true directly to avoid an extra getDoc read operation
+    await setDoc(userRef, cleanData, { merge: true });
+  } catch (error: any) {
+    if (error?.code === 'resource-exhausted') {
+      console.warn('Firestore daily quota reached. Operating in local offline mode.');
     } else {
-      await updateDoc(userRef, cleanData);
+      console.warn('Error saving user profile to Firestore:', error);
     }
-  } catch (error) {
-    console.error('Error saving user profile to Firestore:', error);
   }
 }
 
@@ -93,8 +95,12 @@ export async function loadUserProfileFromFirestore(uid: string): Promise<UserPro
     if (docSnap.exists()) {
       return docSnap.data() as UserProfile;
     }
-  } catch (error) {
-    console.error('Error loading user profile from Firestore:', error);
+  } catch (error: any) {
+    if (error?.code === 'resource-exhausted') {
+      console.warn('Firestore quota reached when loading profile.');
+    } else {
+      console.warn('Error loading user profile from Firestore:', error);
+    }
   }
   return null;
 }
@@ -102,13 +108,17 @@ export async function loadUserProfileFromFirestore(uid: string): Promise<UserPro
 export function subscribeToUserProfile(uid: string, onUpdate: (user: UserProfile) => void): () => void {
   if (!uid || uid === 'usr_default') return () => {};
   const userRef = doc(db, USERS_COLLECTION, uid);
-  return onSnapshot(userRef, (snapshot) => {
-    if (snapshot.exists()) {
-      onUpdate(snapshot.data() as UserProfile);
-    }
-  }, (err) => {
-    console.warn('Firestore user profile snapshot error:', err);
-  });
+  try {
+    return onSnapshot(userRef, (snapshot) => {
+      if (snapshot.exists()) {
+        onUpdate(snapshot.data() as UserProfile);
+      }
+    }, (err) => {
+      if (err?.code === 'resource-exhausted') { console.warn('Firestore quota reached (Profile). Using offline mode.'); } else { console.warn('Firestore user profile snapshot error:', err); }
+    });
+  } catch (e) {
+    return () => {};
+  }
 }
 
 /**
@@ -239,6 +249,11 @@ export async function searchFirestoreUsers(searchTerm: string, currentUserId: st
 }
 
 export async function fetchAllFirestoreUsers(): Promise<LeaderboardUser[]> {
+  // Check memory cache first
+  if (cachedAllUsers && (Date.now() - cachedAllUsers.timestamp < CACHE_TTL_MS)) {
+    return cachedAllUsers.data;
+  }
+
   try {
     const usersRef = collection(db, USERS_COLLECTION);
     const snapshot = await getDocs(usersRef);
@@ -268,10 +283,19 @@ export async function fetchAllFirestoreUsers(): Promise<LeaderboardUser[]> {
       }
     });
 
+    cachedAllUsers = {
+      timestamp: Date.now(),
+      data: results,
+    };
+
     return results;
-  } catch (err) {
-    console.warn('Error fetching all Firestore users:', err);
-    return [];
+  } catch (err: any) {
+    if (err?.code === 'resource-exhausted') {
+      console.warn('Firestore quota reached for fetching users.');
+    } else {
+      console.warn('Error fetching all Firestore users:', err);
+    }
+    return cachedAllUsers?.data || [];
   }
 }
 
@@ -279,10 +303,10 @@ export async function updateUserFollowersInFirestore(uid: string, followersCount
   if (!uid || uid === 'usr_default') return;
   try {
     const userRef = doc(db, USERS_COLLECTION, uid);
-    await updateDoc(userRef, {
+    await setDoc(userRef, {
       followersCount,
       updatedAt: new Date().toISOString(),
-    });
+    }, { merge: true });
   } catch (err) {
     console.warn('Error updating user followers in Firestore:', err);
   }
@@ -310,24 +334,25 @@ export async function saveUserProgressToFirestore(
   const advRef = doc(db, ADVANCES_COLLECTION, userId);
 
   try {
-    const existing = await getDoc(advRef);
-    const data: UserAdvancesData = {
+    const data: Record<string, any> = {
       userId,
       completedLessonIds: progress.completedLessonIds || [],
       completedChapterIds: progress.completedChapterIds || [],
       unlockedBadgeIds: progress.unlockedBadgeIds || [],
-      chapterQuizScores: progress.chapterQuizScores || {},
       lastActiveDate: new Date().toISOString().split('T')[0],
       updatedAt: new Date().toISOString(),
     };
-
-    if (!existing.exists()) {
-      await setDoc(advRef, data);
-    } else {
-      await updateDoc(advRef, data as any);
+    if (progress.chapterQuizScores) {
+      data.chapterQuizScores = progress.chapterQuizScores;
     }
-  } catch (error) {
-    console.error('Error saving progress to Firestore:', error);
+
+    await setDoc(advRef, data, { merge: true });
+  } catch (error: any) {
+    if (error?.code === 'resource-exhausted') {
+      console.warn('Firestore quota reached for progress.');
+    } else {
+      console.warn('Error saving progress to Firestore:', error);
+    }
   }
 }
 
@@ -339,8 +364,12 @@ export async function loadUserProgressFromFirestore(userId: string): Promise<Use
     if (docSnap.exists()) {
       return docSnap.data() as UserAdvancesData;
     }
-  } catch (error) {
-    console.error('Error loading user progress from Firestore:', error);
+  } catch (error: any) {
+    if (error?.code === 'resource-exhausted') {
+      console.warn('Firestore quota reached when loading progress.');
+    } else {
+      console.warn('Error loading user progress from Firestore:', error);
+    }
   }
   return null;
 }
@@ -348,13 +377,17 @@ export async function loadUserProgressFromFirestore(userId: string): Promise<Use
 export function subscribeToUserProgress(userId: string, onUpdate: (advances: UserAdvancesData) => void): () => void {
   if (!userId || userId === 'usr_default') return () => {};
   const advRef = doc(db, ADVANCES_COLLECTION, userId);
-  return onSnapshot(advRef, (snapshot) => {
-    if (snapshot.exists()) {
-      onUpdate(snapshot.data() as UserAdvancesData);
-    }
-  }, (err) => {
-    console.warn('Error subscribing to progress:', err);
-  });
+  try {
+    return onSnapshot(advRef, (snapshot) => {
+      if (snapshot.exists()) {
+        onUpdate(snapshot.data() as UserAdvancesData);
+      }
+    }, (err) => {
+      if (err?.code === 'resource-exhausted') { console.warn('Firestore quota reached (Progress). Using offline mode.'); } else { console.warn('Error subscribing to progress:', err); }
+    });
+  } catch (e) {
+    return () => {};
+  }
 }
 
 // ==========================================
@@ -415,7 +448,7 @@ export function subscribeToMockExams(userId: string, onUpdate: (exams: MockExamR
       list.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
       onUpdate(list);
     }, (err) => {
-      console.warn('Error subscribing to mock exams:', err);
+      if (err?.code === 'resource-exhausted') { console.warn('Firestore quota reached (Exams). Using offline mode.'); } else { console.warn('Error subscribing to mock exams:', err); }
     });
   } catch (e) {
     return () => {};
@@ -449,7 +482,7 @@ export function subscribeToAllClans(onUpdate: (clans: Clan[]) => void): () => vo
     list.sort((a, b) => (b.totalXp || 0) - (a.totalXp || 0));
     onUpdate(list);
   }, (err) => {
-    console.warn('Error subscribing to clans:', err);
+    if (err?.code === 'resource-exhausted') { console.warn('Firestore quota reached (Clans). Using offline mode.'); } else { console.warn('Error subscribing to clans:', err); }
   });
 }
 

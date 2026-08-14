@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, Chapter, Lesson, MockExamResult, LeaderboardUser, NotificationItem } from './types';
 import { ISTQB_CHAPTERS, getIstqbChapters } from './data/istqbContent';
 import { 
@@ -12,6 +12,7 @@ import { Language, translations } from './utils/i18n';
 import { auth, onAuthStateChanged, firebaseSignOut, testFirestoreConnection } from './lib/firebase';
 import { 
   saveUserProfileToFirestore, 
+  saveUserProgressToFirestore,
   loadUserProfileFromFirestore, 
   subscribeToUserProfile,
   loadUserProgressFromFirestore,
@@ -47,6 +48,7 @@ import { NotificationsModal } from './components/NotificationsModal';
 import { ChallengeModal } from './components/ChallengeModal';
 import { ClansView } from './components/ClansView';
 import { SocialView } from './components/SocialView';
+import InstallPWA from './components/InstallPWA';
 
 export default function App() {
   const [user, setUser] = useState<UserProfile>(loadUserProfile);
@@ -82,23 +84,81 @@ export default function App() {
     testFirestoreConnection();
   }, []);
 
-  // Sync state changes to localStorage and Firestore
+  const isRemoteUpdateRef = useRef(false);
+  const lastCloudSavedHashRef = useRef('');
+  const cloudSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Sync state changes to localStorage and throttled Firestore
   useEffect(() => {
+    // Always save locally immediately
     saveUserProfile(user);
-    if (user.uid && user.isLoggedIn) {
-      saveUserProfileToFirestore(user);
+
+    // If this update was triggered by a remote Firestore snapshot, skip sending it back
+    if (isRemoteUpdateRef.current) {
+      isRemoteUpdateRef.current = false;
+      return;
     }
+
+    if (user.uid && user.isLoggedIn) {
+      const stateHash = JSON.stringify({
+        uid: user.uid,
+        xp: user.xpTotal,
+        coins: user.coins,
+        lives: user.livesCurrent,
+        streak: user.streakDays,
+        lessons: user.completedLessonIds,
+        chapters: user.completedChapterIds,
+        badges: user.unlockedBadgeIds,
+        name: user.name,
+        username: user.username,
+        avatar: user.avatarUrl,
+        plan: user.plan,
+        clanId: user.clanId,
+        following: user.followingIds,
+      });
+
+      if (stateHash === lastCloudSavedHashRef.current) {
+        return;
+      }
+
+      if (cloudSaveTimerRef.current) {
+        clearTimeout(cloudSaveTimerRef.current);
+      }
+
+      cloudSaveTimerRef.current = setTimeout(() => {
+        lastCloudSavedHashRef.current = stateHash;
+        saveUserProfileToFirestore(user);
+        if (user.uid) {
+          saveUserProgressToFirestore(user.uid, {
+            userId: user.uid,
+            completedLessonIds: user.completedLessonIds || [],
+            completedChapterIds: user.completedChapterIds || [],
+            unlockedBadgeIds: user.unlockedBadgeIds || [],
+          });
+        }
+      }, 1500);
+    }
+
+    return () => {
+      if (cloudSaveTimerRef.current) {
+        clearTimeout(cloudSaveTimerRef.current);
+      }
+    };
   }, [user]);
+
+  const [isAppVisible, setIsAppVisible] = useState(!document.hidden);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsAppVisible(!document.hidden);
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   // Firebase Auth State Listener & Realtime Firestore Sync
   useEffect(() => {
-    let unsubs: (() => void)[] = [];
-
     const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
-      // Clean up previous user subscriptions
-      unsubs.forEach(u => u());
-      unsubs = [];
-
       if (fbUser) {
         const uid = fbUser.uid;
         const [firestoreUser, advancesData, examsData] = await Promise.all([
@@ -114,6 +174,7 @@ export default function App() {
         const autoUsername = generateUniqueUsername(fbUser.displayName || fbUser.email || 'candidato');
 
         if (firestoreUser) {
+          isRemoteUpdateRef.current = true;
           setUser(prev => ({
             ...prev,
             ...firestoreUser,
@@ -144,57 +205,68 @@ export default function App() {
           setUser(newUserProfile);
           await saveUserProfileToFirestore(newUserProfile);
         }
-
-        // Setup real-time subscribers for this authenticated user
-        unsubs.push(
-          subscribeToUserProfile(uid, (remoteProfile) => {
-            if (remoteProfile) {
-              setUser(prev => ({
-                ...prev,
-                ...remoteProfile,
-                uid,
-                isLoggedIn: true,
-              }));
-            }
-          })
-        );
-
-        unsubs.push(
-          subscribeToUserProgress(uid, (remoteAdvances) => {
-            if (remoteAdvances) {
-              setUser(prev => ({
-                ...prev,
-                completedLessonIds: remoteAdvances.completedLessonIds || prev.completedLessonIds,
-                completedChapterIds: remoteAdvances.completedChapterIds || prev.completedChapterIds,
-                unlockedBadgeIds: remoteAdvances.unlockedBadgeIds || prev.unlockedBadgeIds,
-              }));
-            }
-          })
-        );
-
-        unsubs.push(
-          subscribeToMockExams(uid, (remoteExams) => {
-            if (remoteExams) {
-              setMockHistory(remoteExams);
-            }
-          })
-        );
-
-        unsubs.push(
-          subscribeToUserNotifications(uid, (remoteNotifs) => {
-            if (remoteNotifs) {
-              setNotifications(remoteNotifs);
-            }
-          })
-        );
       }
     });
 
     return () => {
       unsubscribeAuth();
-      unsubs.forEach(u => u());
     };
   }, []);
+
+  // Manage Realtime Firestore Subscribers based on visibility
+  useEffect(() => {
+    let unsubs: (() => void)[] = [];
+
+    if (user.uid && user.isLoggedIn && isAppVisible) {
+      unsubs.push(
+        subscribeToUserProfile(user.uid, (remoteProfile) => {
+          if (remoteProfile) {
+            isRemoteUpdateRef.current = true;
+            setUser(prev => ({
+              ...prev,
+              ...remoteProfile,
+              uid: user.uid,
+              isLoggedIn: true,
+            }));
+          }
+        })
+      );
+
+      unsubs.push(
+        subscribeToUserProgress(user.uid, (remoteAdvances) => {
+          if (remoteAdvances) {
+            isRemoteUpdateRef.current = true;
+            setUser(prev => ({
+              ...prev,
+              completedLessonIds: remoteAdvances.completedLessonIds || prev.completedLessonIds,
+              completedChapterIds: remoteAdvances.completedChapterIds || prev.completedChapterIds,
+              unlockedBadgeIds: remoteAdvances.unlockedBadgeIds || prev.unlockedBadgeIds,
+            }));
+          }
+        })
+      );
+
+      unsubs.push(
+        subscribeToMockExams(user.uid, (remoteExams) => {
+          if (remoteExams) {
+            setMockHistory(remoteExams);
+          }
+        })
+      );
+
+      unsubs.push(
+        subscribeToUserNotifications(user.uid, (remoteNotifs) => {
+          if (remoteNotifs) {
+            setNotifications(remoteNotifs);
+          }
+        })
+      );
+    }
+
+    return () => {
+      unsubs.forEach(u => u());
+    };
+  }, [user.uid, user.isLoggedIn, isAppVisible]);
 
   // Sync all registered Firestore users into colleagues list on mount
   useEffect(() => {
@@ -684,6 +756,7 @@ export default function App() {
         />
       )}
 
+      <InstallPWA />
     </div>
   );
 }

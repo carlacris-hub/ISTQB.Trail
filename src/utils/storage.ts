@@ -131,20 +131,8 @@ export function saveUserProfile(user: UserProfile) {
     user.level = lvlInfo.level;
     user.levelTitle = lvlInfo.title;
     localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
-
-    // Save directly to Firestore for logged in / active users
-    if (user.uid || (user.id && user.id !== 'usr_default')) {
-      const uid = user.uid || user.id;
-      saveUserProfileToFirestore(user);
-      saveUserProgressToFirestore(uid, {
-        userId: uid,
-        completedLessonIds: user.completedLessonIds || [],
-        completedChapterIds: user.completedChapterIds || [],
-        unlockedBadgeIds: user.unlockedBadgeIds || [],
-      });
-    }
   } catch (e) {
-    console.error('Error saving user profile:', e);
+    console.error('Error saving user profile to local storage:', e);
   }
 }
 

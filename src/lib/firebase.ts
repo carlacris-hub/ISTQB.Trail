@@ -44,8 +44,10 @@ export const googleProvider = new GoogleAuthProvider();
 export async function testFirestoreConnection() {
   try {
     await getDocFromServer(doc(db, 'system', 'connection_test'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
+  } catch (error: any) {
+    if (error?.code === 'resource-exhausted') {
+      console.warn("Firestore daily quota reached. App operating smoothly using local offline persistence.");
+    } else if (error instanceof Error && error.message.includes('the client is offline')) {
       console.warn("Firestore client appears offline or connecting.");
     }
   }
