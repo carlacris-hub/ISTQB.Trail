@@ -178,75 +178,41 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
                     <img
                       src={u.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
                       alt={u.name}
-                      className="w-10 h-10 rounded-xl object-cover border border-slate-800 shrink-0"
+                      className="w-8 h-8 rounded-xl object-cover border border-slate-800 shrink-0"
                     />
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <h4 className={`text-xs font-bold truncate ${isUser ? 'text-teal-300 font-extrabold' : 'text-white'}`}>
+                    <div className="min-w-0 flex-1 flex flex-col justify-center">
+                      <div className="flex items-center gap-1.5 w-full">
+                        <h4 className={`text-sm font-bold truncate ${isUser ? 'text-teal-300 font-extrabold' : 'text-white'}`}>
                           {u.name}
                         </h4>
-                        {u.username && (
-                          <span className="text-[10px] font-mono text-teal-400 font-bold bg-teal-500/10 px-1.5 py-0.2 rounded border border-teal-500/20 shrink-0">
-                            @{u.username}
-                          </span>
-                        )}
                         {isUser && (
-                          <span className="text-[9px] font-extrabold bg-teal-500 text-slate-950 px-1.5 py-0.2 rounded shrink-0">
+                          <span className="text-[9px] font-extrabold bg-teal-500 text-slate-950 px-1.5 py-0.5 rounded shrink-0">
                             VOCÊ
                           </span>
                         )}
-                        <span className="text-[9px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.2 rounded shrink-0">
-                          {u.league}
-                        </span>
                       </div>
 
-                      {u.company && (
-                        <p className="text-[10px] text-teal-400 flex items-center gap-1 truncate mt-0.5">
-                          <Building2 className="w-3 h-3 text-teal-400 shrink-0" />
-                          <span>{u.company}</span>
-                        </p>
+                      {u.username && (
+                        <div className="flex items-center gap-1 text-[10px] text-slate-400 w-full truncate mt-0.5">
+                          <span className="text-teal-400 font-mono truncate">
+                            @{u.username}
+                          </span>
+                        </div>
                       )}
-
-                      <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
-                        <Award className="w-3 h-3 text-amber-400" /> {u.badgeCount} Badges
-                      </span>
                     </div>
                   </div>
 
-                  {/* Actions & XP */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    {!isUser && (
-                      <>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onToggleFollow(u.id, u);
-                          }}
-                          className={`p-2 rounded-lg border transition ${
-                            isFollowing 
-                              ? 'bg-teal-500/20 text-teal-300 border-teal-500/40 hover:bg-rose-500/20 hover:text-rose-300 hover:border-rose-500/40' 
-                              : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:bg-teal-500 hover:text-slate-950'
-                          }`}
-                          title={isFollowing ? 'Seguindo (clique para deixar de seguir)' : 'Seguir colega'}
-                        >
-                          {isFollowing ? <UserCheck className="w-3.5 h-3.5" /> : <UserPlus className="w-3.5 h-3.5" />}
-                        </button>
-
-                        <button
-                          onClick={() => onStartChallenge(u)}
-                          className="p-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition"
-                          title="Desafiar Duelo 1v1"
-                        >
-                          <Swords className="w-3.5 h-3.5" />
-                        </button>
-                      </>
-                    )}
-
+                  {/* XP & View More Action */}
+                  <div 
+                    onClick={() => onSelectUser(u)}
+                    className="flex items-center gap-2 shrink-0 cursor-pointer"
+                  >
                     <div className="flex items-center gap-1 font-black text-xs text-emerald-400 min-w-[50px] justify-end">
                       <Zap className="w-3.5 h-3.5 fill-emerald-400" />
                       <span>{(u.xpTotal || u.weeklyXp || 0).toLocaleString()}</span>
                     </div>
+                    <ChevronRight className="w-4 h-4 text-slate-500 hover:text-slate-300 transition shrink-0 ml-1" />
                   </div>
 
                 </div>

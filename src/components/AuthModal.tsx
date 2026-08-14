@@ -3,12 +3,7 @@ import { UserProfile } from '../types';
 import { translations, Language } from '../utils/i18n';
 import { User, Mail, Lock, Sparkles, Check, ArrowRight, ShieldCheck, Globe, AlertCircle, LogOut, X } from 'lucide-react';
 import { AppLogoIcon } from './AppLogo';
-import { auth, googleProvider, signInWithPopup } from '../lib/firebase';
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  updateProfile 
-} from 'firebase/auth';
+import { supabase } from '../lib/supabase';
 
 interface AuthModalProps {
   user: UserProfile;
@@ -96,47 +91,56 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     );
   }
 
-  const handleEmailAuth = async (e: React.FormEvent) => {
+  const handleEmailAuth = async (e) => {
     e.preventDefault();
+    if (!email || !password) return;
     setLoading(true);
     setErrorMsg(null);
 
     try {
       if (mode === 'signup') {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        if (name && userCredential.user) {
-          await updateProfile(userCredential.user, { displayName: name });
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: name,
+            }
+          }
+        });
+        if (error) throw error;
+        
+        if (data.user) {
+          onAuthSuccess({
+            uid: data.user.id,
+            id: data.user.id,
+            email: data.user.email,
+            name: name || data.user.user_metadata?.full_name || 'Usuário',
+            isLoggedIn: true,
+            authProvider: 'email',
+          }, true);
         }
-        onAuthSuccess({
-          uid: userCredential.user.uid,
-          isLoggedIn: true,
-          authProvider: 'email',
-          email: userCredential.user.email || email,
-          name: name || userCredential.user.displayName || 'Candidato ISTQB',
-          hasCompletedTutorial: false,
-        }, true);
       } else {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        onAuthSuccess({
-          uid: userCredential.user.uid,
-          isLoggedIn: true,
-          authProvider: 'email',
-          email: userCredential.user.email || email,
-          name: userCredential.user.displayName || user.name || 'Candidato ISTQB',
-        }, false);
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+
+        if (data.user) {
+          onAuthSuccess({
+            uid: data.user.id,
+            id: data.user.id,
+            email: data.user.email,
+            name: data.user.user_metadata?.full_name || 'Usuário',
+            isLoggedIn: true,
+            authProvider: 'email',
+          }, false);
+        }
       }
-      onClose();
-    } catch (err: any) {
-      console.error('Email Auth Error:', err);
-      let msg = err?.message || 'Falha na autenticação';
-      if (err?.code === 'auth/email-already-in-use') {
-        msg = lang === 'en' ? 'This email is already registered.' : 'Este e-mail já está cadastrado.';
-      } else if (err?.code === 'auth/wrong-password' || err?.code === 'auth/user-not-found' || err?.code === 'auth/invalid-credential') {
-        msg = lang === 'en' ? 'Invalid email or password.' : 'E-mail ou senha incorretos.';
-      } else if (err?.code === 'auth/weak-password') {
-        msg = lang === 'en' ? 'Password must be at least 6 characters.' : 'A senha deve ter pelo menos 6 caracteres.';
-      }
-      setErrorMsg(msg);
+    } catch (err) {
+      console.error('Auth Error:', err);
+      setErrorMsg(err.message || 'Authentication failed');
     } finally {
       setLoading(false);
     }
@@ -146,34 +150,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
     setErrorMsg(null);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const firebaseUser = result.user;
-      
-      onAuthSuccess({
-        uid: firebaseUser.uid,
-        isLoggedIn: true,
-        authProvider: 'google',
-        email: firebaseUser.email || 'candidato@sublime-se.com',
-        name: firebaseUser.displayName || 'Usuário Google',
-        avatarUrl: firebaseUser.photoURL || user.avatarUrl,
-        hasCompletedTutorial: false,
-      }, true);
-      onClose();
-    } catch (err: any) {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
+      // Note: Redirect handles the rest in onAuthStateChanged
+    } catch (err) {
       console.error('Google Auth Error:', err);
-      let msg = err?.message || (lang === 'en' ? 'Google Sign-In failed.' : 'Falha no Login com Google.');
-      if (err?.code === 'auth/unauthorized-domain') {
-        const currentHostname = typeof window !== 'undefined' ? window.location.hostname : 'seu domínio';
-        msg = lang === 'en' 
-          ? `The domain "${currentHostname}" is not yet added to Authorized Domains in Firebase Authentication. Please use Email/Password or Guest Mode below, or add this domain in Firebase Console > Authentication > Settings > Authorized Domains.` 
-          : `O domínio "${currentHostname}" precisa ser adicionado aos Domínios Autorizados no Firebase Authentication. Use E-mail/Senha ou Modo Convidado abaixo para continuar agora, ou adicione o domínio no Console do Firebase (Authentication > Settings > Authorized domains).`;
-      } else if (err?.code === 'auth/popup-closed-by-user') {
-        msg = lang === 'en' ? 'Login popup was closed before completing.' : 'A janela de login foi fechada antes de concluir.';
-      } else if (err?.code === 'auth/cancelled-popup-request') {
-        msg = lang === 'en' ? 'Only one popup request allowed at a time.' : 'Requisição de login cancelada.';
-      }
-      setErrorMsg(msg);
-    } finally {
+      setErrorMsg(t.loginError || 'Authentication failed');
       setLoading(false);
     }
   };

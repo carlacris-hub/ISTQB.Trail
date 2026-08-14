@@ -1,4 +1,6 @@
-import { supabase } from '../lib/supabase';
+import fs from 'fs';
+
+const content = `import { supabase } from '../lib/supabase';
 import { 
   UserProfile, 
   LeaderboardUser, 
@@ -118,12 +120,12 @@ export async function loadUserProfileFromFirestore(uid: string): Promise<UserPro
 export function subscribeToUserProfile(uid: string, onUpdate: (user: UserProfile) => void): () => void {
   if (!uid || uid === 'usr_default') return () => {};
 
-  const channel = supabase.channel(`user_${uid}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: `id=eq.${uid}` }, async (payload) => {
+  const channel = supabase.channel(\`user_\${uid}\`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: \`id=eq.\${uid}\` }, async (payload) => {
       const user = await loadUserProfileFromFirestore(uid);
       if (user) onUpdate(user);
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'user_advances', filter: `user_id=eq.${uid}` }, async (payload) => {
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'user_advances', filter: \`user_id=eq.\${uid}\` }, async (payload) => {
       const user = await loadUserProfileFromFirestore(uid);
       if (user) onUpdate(user);
     })
@@ -232,8 +234,8 @@ export function subscribeToMockExams(userId: string, onUpdate: (exams: MockExamR
   };
   fetchAndEmit();
 
-  const channel = supabase.channel(`exams_${userId}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'mock_exams', filter: `user_id=eq.${userId}` }, () => {
+  const channel = supabase.channel(\`exams_\${userId}\`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'mock_exams', filter: \`user_id=eq.\${userId}\` }, () => {
       fetchAndEmit();
     })
     .subscribe();
@@ -351,49 +353,6 @@ export function subscribeToUserChallenges(userId: string, onUpdate: (c: Challeng
 export async function sendNotificationToFirestore(n: NotificationItem): Promise<void> {}
 export async function markNotificationsAsReadInFirestore(userId: string): Promise<void> {}
 export function subscribeToUserNotifications(userId: string, onUpdate: (n: NotificationItem[]) => void) { return () => {}; }
+`
 
-export async function updateUserFollowersInFirestore(userId: string, newFollowersCount: number, followingIds: string[]): Promise<void> {
-  try {
-    await supabase.from('users').update({
-      followers_count: newFollowersCount,
-      following_ids: followingIds
-    }).eq('id', userId);
-  } catch (err) {
-    console.error('Error updating followers:', err);
-  }
-}
-
-export async function syncFirestoreUsersToColleagues(uids: string[]): Promise<LeaderboardUser[]> {
-  if (!uids || uids.length === 0) return [];
-  try {
-    const { data, error } = await supabase.from('users').select('id, name, username, avatar_url, xp_total, level, company, followers_count').in('id', uids);
-    if (error) throw error;
-    
-    return data.map(u => ({
-      id: u.id,
-      name: u.name,
-      username: u.username,
-      avatarUrl: u.avatar_url,
-      xpTotal: u.xp_total,
-      level: u.level,
-      company: u.company,
-      followersCount: u.followers_count
-    }));
-  } catch (err) {
-    console.warn('Error syncing colleagues:', err);
-    return [];
-  }
-}
-
-export async function loadUserProgressFromFirestore(userId: string) {
-  return null; // Not needed separately in the new model since it's grouped in loadUserProfileFromFirestore
-}
-
-export function subscribeToUserProgress(userId: string, onUpdate: (a: any) => void) {
-  return () => {};
-}
-
-export async function loadMockExamHistoryFromFirestore(userId: string) {
-  return [];
-}
-export const fetchAllFirestoreUsers = fetchAllUsersFromFirestore;
+fs.writeFileSync('src/utils/firestoreService.ts', content);

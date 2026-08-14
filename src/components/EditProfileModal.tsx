@@ -7,6 +7,8 @@ import { validateUsername, generateBaseUsername } from '../utils/usernameUtils';
 import { checkUsernameTakenInFirestore } from '../utils/firestoreService';
 import { X, User, Image, Save, Sparkles, Check, Globe, AtSign, AlertCircle, Palette } from 'lucide-react';
 import { translations } from '../utils/i18n';
+import { resizeAndCompressImage } from '../utils/imageCompression';
+import { uploadAvatar } from '../lib/supabase';
 
 interface EditProfileModalProps {
   user: UserProfile;
@@ -34,6 +36,32 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onSave
     user.avatarUrl || PRESET_AVATARS[0].url
   );
   const [customAvatarUrl, setCustomAvatarUrl] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    setErrorMsg('');
+
+    try {
+      const compressedBlob = await resizeAndCompressImage(file);
+      const publicUrl = await uploadAvatar(user.id || user.uid, compressedBlob);
+      
+      if (publicUrl) {
+        setCustomAvatarUrl(publicUrl);
+        setSelectedAvatar(publicUrl);
+      } else {
+        throw new Error("Failed to upload image");
+      }
+    } catch (err: any) {
+      console.error('Image processing error:', err);
+      setErrorMsg(t.error || 'Erro ao processar imagem.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const handleColorSelect = (colorOpt: typeof AVATAR_COLOR_OPTIONS[0]) => {
     setSelectedColor(colorOpt);
@@ -210,13 +238,20 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onSave
 
             <div className="flex items-center gap-2">
               <Image className="w-4 h-4 text-slate-400 shrink-0" />
-              <input
-                type="url"
-                placeholder={lang === 'en' ? 'Or paste custom image URL...' : 'Ou cole a URL de uma imagem personalizada...'}
-                value={customAvatarUrl}
-                onChange={(e) => setCustomAvatarUrl(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500"
-              />
+                            <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5 cursor-pointer hover:text-teal-400 transition">
+                  <Image className="w-3.5 h-3.5" />
+                  {lang === 'en' ? 'Upload Custom Avatar' : 'Fazer Upload de Foto'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    disabled={uploadingImage}
+                  />
+                </label>
+                {uploadingImage && <span className="text-[10px] text-teal-400 animate-pulse">Processando imagem (250x250, WebP)...</span>}
+              </div>
             </div>
 
             {/* Privacy & LGPD / GDPR Camera & Gallery Permission Notice */}

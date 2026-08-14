@@ -9,7 +9,7 @@ import {
   getNotifications, markNotificationsAsRead, toggleFollowColleague, syncFirestoreUsersToColleagues 
 } from './utils/socialStorage';
 import { Language, translations } from './utils/i18n';
-import { auth, onAuthStateChanged, firebaseSignOut, testFirestoreConnection } from './lib/firebase';
+import { supabase } from './lib/supabase';
 import { 
   saveUserProfileToFirestore, 
   saveUserProgressToFirestore,
@@ -81,8 +81,7 @@ export default function App() {
 
   // Verify Firestore connection on boot
   useEffect(() => {
-    testFirestoreConnection();
-  }, []);
+      }, []);
 
   const isRemoteUpdateRef = useRef(false);
   const lastCloudSavedHashRef = useRef('');
@@ -96,6 +95,28 @@ export default function App() {
     // If this update was triggered by a remote Firestore snapshot, skip sending it back
     if (isRemoteUpdateRef.current) {
       isRemoteUpdateRef.current = false;
+      if (cloudSaveTimerRef.current) {
+        clearTimeout(cloudSaveTimerRef.current);
+      }
+      
+      // Update the local hash so that we don't immediately trigger a save on the next tiny local action
+      const remoteStateHash = JSON.stringify({
+        uid: user.uid,
+        xp: user.xpTotal,
+        coins: user.coins,
+        lives: user.livesCurrent,
+        streak: user.streakDays,
+        lessons: user.completedLessonIds,
+        chapters: user.completedChapterIds,
+        badges: user.unlockedBadgeIds,
+        name: user.name,
+        username: user.username,
+        avatar: user.avatarUrl,
+        plan: user.plan,
+        clanId: user.clanId,
+        following: user.followingIds,
+      });
+      lastCloudSavedHashRef.current = remoteStateHash;
       return;
     }
 
@@ -158,55 +179,49 @@ export default function App() {
 
   // Firebase Auth State Listener & Realtime Firestore Sync
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      const fbUser = session?.user;
       if (fbUser) {
-        const uid = fbUser.uid;
-        const [firestoreUser, advancesData, examsData] = await Promise.all([
-          loadUserProfileFromFirestore(uid),
-          loadUserProgressFromFirestore(uid),
-          loadMockExamHistoryFromFirestore(uid)
-        ]);
-
-        if (examsData && examsData.length > 0) {
-          setMockHistory(examsData);
+        // Authenticated
+        const uId = fbUser.id;
+        try {
+          const profile = await loadUserProfileFromFirestore(uId);
+          if (profile) {
+            setUser(prev => ({ ...prev, ...profile, isLoggedIn: true, uid: uId, id: uId }));
+            
+            // Re-subscribe to progress
+            if (window.unsubProgress) window.unsubProgress();
+            window.unsubProgress = subscribeToUserProfile(uId, (updated) => {
+              setUser(prev => ({ ...prev, ...updated }));
+            });
+            
+          } else {
+            // New user missing firestore profile
+            const newProfile = {
+              ...user,
+              uid: uId,
+              id: uId,
+              email: fbUser.email || '',
+              name: fbUser.user_metadata?.full_name || 'Usuário ISTQB',
+              isLoggedIn: true
+            };
+            setUser(newProfile);
+            await saveUserProfileToFirestore(newProfile);
+          }
+        } catch (err) {
+          console.error("Error loading user post-login:", err);
         }
-
-        const autoUsername = generateUniqueUsername(fbUser.displayName || fbUser.email || 'candidato');
-
-        if (firestoreUser) {
-          isRemoteUpdateRef.current = true;
-          setUser(prev => ({
-            ...prev,
-            ...firestoreUser,
-            completedLessonIds: advancesData?.completedLessonIds || firestoreUser.completedLessonIds || prev.completedLessonIds,
-            completedChapterIds: advancesData?.completedChapterIds || firestoreUser.completedChapterIds || prev.completedChapterIds,
-            unlockedBadgeIds: advancesData?.unlockedBadgeIds || firestoreUser.unlockedBadgeIds || prev.unlockedBadgeIds,
-            uid,
-            isLoggedIn: true,
-            email: fbUser.email || prev.email,
-            name: fbUser.displayName || firestoreUser.name || prev.name,
-            username: firestoreUser.username || prev.username || autoUsername,
-            avatarUrl: fbUser.photoURL || firestoreUser.avatarUrl || prev.avatarUrl,
-            hasChosenInitialAuth: true,
-          }));
-        } else {
-          // Initialize new Firestore document
-          const newUserProfile: UserProfile = {
-            ...user,
-            uid,
-            isLoggedIn: true,
-            authProvider: 'google',
-            email: fbUser.email || user.email,
-            name: fbUser.displayName || user.name,
-            username: autoUsername,
-            avatarUrl: fbUser.photoURL || user.avatarUrl,
-            hasChosenInitialAuth: true,
-          };
-          setUser(newUserProfile);
-          await saveUserProfileToFirestore(newUserProfile);
+      } else {
+        // Logged out
+        if (user.isLoggedIn && user.authProvider !== 'guest') {
+          setUser(getDefaultUser());
         }
       }
     });
+
+    return () => {
+      subscription.unsubscribe();
+    };
 
     return () => {
       unsubscribeAuth();
@@ -341,7 +356,7 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      await firebaseSignOut(auth);
+      await supabase.auth.signOut();
     } catch (err) {
       console.error('Logout error:', err);
     }

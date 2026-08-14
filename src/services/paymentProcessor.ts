@@ -1,4 +1,4 @@
-import { db, doc, setDoc } from '../lib/firebase';
+import { supabase } from '../lib/supabase';
 import { UserProfile } from '../types';
 import { 
   CountryRegionalConfig, 
@@ -131,12 +131,16 @@ export async function processGlobalPayment(
   // Save transaction to Firestore if user is authenticated
   if (user.uid) {
     try {
-      const txRef = doc(db, 'transactions', txId);
-      await setDoc(txRef, {
-        ...transaction,
-        userId: user.uid,
-        userEmail: user.email,
-        userName: user.name,
+      await supabase.from('transactions').insert({
+        id: txId,
+        user_id: user.uid,
+        user_email: user.email,
+        user_name: user.name,
+        type: transaction.type,
+        amount: transaction.amount,
+        currency_code: transaction.currencyCode,
+        status: transaction.status,
+        created_at: transaction.createdAt
       });
     } catch (err) {
       console.error('Firestore transaction save error:', err);
