@@ -43,7 +43,7 @@ export const UserSearchModal: React.FC<UserSearchModalProps> = ({
     let isCancelled = false;
     const clean = query.trim();
     if (clean.length >= 2) {
-      searchFirestoreUsers(clean, currentUser.id).then((fsUsers) => {
+      searchFirestoreUsers(clean).then((fsUsers) => {
         if (!isCancelled) {
           const localIds = new Set(localUserResults.map(r => r.id));
           const filteredFs = fsUsers

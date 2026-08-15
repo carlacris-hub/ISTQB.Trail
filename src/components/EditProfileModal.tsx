@@ -37,6 +37,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onSave
   );
   const [customAvatarUrl, setCustomAvatarUrl] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
     const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -119,7 +120,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onSave
 
     // 3. Check Firestore for uniqueness if logged in
     setIsCheckingUsername(true);
-    const takenInFirestore = await checkUsernameTakenInFirestore(cleanUsername, user.uid || user.id);
+    const takenInFirestore = await checkUsernameTakenInFirestore(cleanUsername);
     setIsCheckingUsername(false);
 
     if (takenInFirestore) {

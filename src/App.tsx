@@ -187,14 +187,7 @@ export default function App() {
         try {
           const profile = await loadUserProfileFromFirestore(uId);
           if (profile) {
-            setUser(prev => ({ ...prev, ...profile, isLoggedIn: true, uid: uId, id: uId }));
-            
-            // Re-subscribe to progress
-            if (window.unsubProgress) window.unsubProgress();
-            window.unsubProgress = subscribeToUserProfile(uId, (updated) => {
-              setUser(prev => ({ ...prev, ...updated }));
-            });
-            
+            setUser(prev => ({ ...prev, ...profile, isLoggedIn: true, uid: uId, id: uId, hasChosenInitialAuth: true }));
           } else {
             // New user missing firestore profile
             const newProfile = {
@@ -203,7 +196,8 @@ export default function App() {
               id: uId,
               email: fbUser.email || '',
               name: fbUser.user_metadata?.full_name || 'Usuário ISTQB',
-              isLoggedIn: true
+              isLoggedIn: true,
+              hasChosenInitialAuth: true
             };
             setUser(newProfile);
             await saveUserProfileToFirestore(newProfile);
@@ -221,10 +215,6 @@ export default function App() {
 
     return () => {
       subscription.unsubscribe();
-    };
-
-    return () => {
-      unsubscribeAuth();
     };
   }, []);
 

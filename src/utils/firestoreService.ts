@@ -60,7 +60,7 @@ function fromDbUser(dbUser: any, dbAdvances: any): UserProfile {
     company: dbUser.company,
     bio: dbUser.bio,
     country: dbUser.country,
-    language: dbUser.language,
+    language: dbUser.language || 'pt',
     plan: dbUser.plan,
     xpTotal: dbUser.xp_total,
     level: dbUser.level,
@@ -75,9 +75,8 @@ function fromDbUser(dbUser: any, dbAdvances: any): UserProfile {
     completedLessonIds: dbAdvances?.completed_lesson_ids || [],
     completedChapterIds: dbAdvances?.completed_chapter_ids || [],
     unlockedBadgeIds: dbAdvances?.unlocked_badge_ids || [],
-    mockExamsUsedThisMonth: 0,
-    badges: []
-  };
+    mockExamsUsedThisMonth: 0
+  } as UserProfile;
 }
 
 export async function saveUserProfileToFirestore(user: UserProfile): Promise<void> {
@@ -95,9 +94,7 @@ export async function saveUserProfileToFirestore(user: UserProfile): Promise<voi
   }
 }
 
-export async function saveUserProgressToFirestore(user: UserProfile): Promise<void> {
-  return saveUserProfileToFirestore(user);
-}
+export async function saveUserProgressToFirestore(uid: string, data: any): Promise<void> {}
 
 export async function loadUserProfileFromFirestore(uid: string): Promise<UserProfile | null> {
   if (!uid || uid === 'usr_default') return null;
@@ -150,6 +147,10 @@ export async function fetchAllUsersFromFirestore(): Promise<LeaderboardUser[]> {
     if (error) throw error;
     
     return users.map(u => ({
+      weeklyXp: u.xp_total || 0,
+      rank: 0,
+      league: 'Bronze',
+      badgeCount: 0,
       id: u.id,
       name: u.name,
       username: u.username,
@@ -203,7 +204,7 @@ export async function saveMockExamResultToFirestore(result: MockExamResult): Pro
       user_id: result.userId,
       date: result.date || new Date().toISOString(),
       score: result.score,
-      total_questions: result.totalQuestions,
+      total_questions: 40,
       passed: result.passed,
       time_spent_seconds: result.timeSpentSeconds
     };
@@ -226,7 +227,9 @@ export function subscribeToMockExams(userId: string, onUpdate: (exams: MockExamR
         score: d.score,
         totalQuestions: d.total_questions,
         passed: d.passed,
-        timeSpentSeconds: d.time_spent_seconds
+        timeSpentSeconds: d.time_spent_seconds,
+        percentage: Math.round((d.score / (d.total_questions || 40)) * 100),
+        answers: []
       })));
     }
   };
@@ -250,16 +253,15 @@ export async function fetchAllClansFromFirestore(): Promise<Clan[]> {
   return data.map(c => ({
     id: c.id,
     name: c.name,
+    tag: c.tag || '',
     description: c.description,
-    emblem: c.emblem,
+    avatarUrl: c.avatar_url,
     leaderId: c.leader_id,
-    memberIds: c.member_ids,
+    leaderName: c.leader_name || 'Leader',
     members: [], 
-    memberCount: c.members_count,
     totalXp: c.total_xp,
-    requiredLevel: c.required_level,
-    isPrivate: c.is_private,
-    joinRequests: c.join_requests
+    level: c.level || 1,
+    joinType: c.join_type || 'open'
   }));
 }
 
@@ -285,15 +287,14 @@ export async function createClanInFirestore(clan: Clan): Promise<boolean> {
   const { error } = await supabase.from('clans').insert({
     id: clan.id,
     name: clan.name,
+    tag: clan.tag,
     description: clan.description,
-    emblem: clan.emblem,
+    avatar_url: clan.avatarUrl,
     leader_id: clan.leaderId,
-    member_ids: [clan.leaderId],
-    members_count: 1,
+    leader_name: clan.leaderName,
     total_xp: clan.totalXp || 0,
-    required_level: clan.requiredLevel || 1,
-    is_private: clan.isPrivate || false,
-    join_requests: []
+    level: clan.level || 1,
+    join_type: clan.joinType || 'open'
   });
   return !error;
 }
@@ -301,14 +302,14 @@ export async function createClanInFirestore(clan: Clan): Promise<boolean> {
 export async function updateClanInFirestore(clanId: string, updates: Partial<Clan>): Promise<void> {
   const dbUpdates: any = {};
   if (updates.name !== undefined) dbUpdates.name = updates.name;
+  if (updates.tag !== undefined) dbUpdates.tag = updates.tag;
   if (updates.description !== undefined) dbUpdates.description = updates.description;
-  if (updates.emblem !== undefined) dbUpdates.emblem = updates.emblem;
-  if (updates.requiredLevel !== undefined) dbUpdates.required_level = updates.requiredLevel;
-  if (updates.isPrivate !== undefined) dbUpdates.is_private = updates.isPrivate;
+  if (updates.avatarUrl !== undefined) dbUpdates.avatar_url = updates.avatarUrl;
+  if (updates.totalXp !== undefined) dbUpdates.total_xp = updates.totalXp;
+  if (updates.level !== undefined) dbUpdates.level = updates.level;
+  if (updates.joinType !== undefined) dbUpdates.join_type = updates.joinType;
   
-  if (Object.keys(dbUpdates).length > 0) {
-    await supabase.from('clans').update(dbUpdates).eq('id', clanId);
-  }
+  await supabase.from('clans').update(dbUpdates).eq('id', clanId);
 }
 
 export async function joinClanInFirestore(clanId: string, user: UserProfile): Promise<boolean> {
@@ -370,6 +371,10 @@ export async function syncFirestoreUsersToColleagues(uids: string[]): Promise<Le
     if (error) throw error;
     
     return data.map(u => ({
+      weeklyXp: u.xp_total || 0,
+      rank: 0,
+      league: 'Bronze',
+      badgeCount: 0,
       id: u.id,
       name: u.name,
       username: u.username,

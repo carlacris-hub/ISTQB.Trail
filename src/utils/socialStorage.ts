@@ -344,7 +344,7 @@ export function toggleFollowColleague(
   saveStoredColleagues(updatedColleagues);
 
   // 4. Update Firestore for target user
-  updateUserFollowersInFirestore(targetUserId, newTargetFollowersCount);
+  updateUserFollowersInFirestore(targetUserId, newTargetFollowersCount, []);
 
   // 5. Recalculate followers for current user
   updatedUser.followersCount = calculateFollowersCount(updatedUser.id);
